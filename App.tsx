@@ -5,6 +5,20 @@ import Card from './components/Card';
 import { GREETINGS, AUDIO_URL } from './constants';
 import Icon from './components/Icons';
 import Countdown from './components/Countdown';
+import LinkTimer from './components/LinkTimer';
+
+// ===== NhutCoder Team — site chính quản lý link thiệp (?id=) =====
+// Link free sống 10 phút; gia hạn/hồi sinh bằng Xu tại CREATE_URL?id=…
+const API_BASE = 'https://nhutcoder-team-v2.vercel.app';
+const CREATE_URL = `${API_BASE}/tang-giang-sinh`;
+
+interface GiftData {
+  name?: string;
+  to?: string;
+  from?: string;
+  text?: string;
+  sign?: string;
+}
 
 const App: React.FC = () => {
   const [started, setStarted] = useState(false);
@@ -13,8 +27,39 @@ const App: React.FC = () => {
   const [isMuted, setIsMuted] = useState(false);
   const [audioError, setAudioError] = useState(false);
   const qs = new URLSearchParams(location.search);
-  const to = qs.get('to') || 'Kiều Anh';
-  const from = qs.get('from') || '';
+  // ===== NhutCoder Team — tải dữ liệu link cá nhân hóa ?id=XXXX =====
+  const [gift, setGift] = useState<GiftData | null>(null);
+  const [linkId, setLinkId] = useState<string | null>(null);
+  const [expiresAt, setExpiresAt] = useState<number | null>(null);
+  const [expired, setExpired] = useState<{ title: string; sub: string } | null>(null);
+
+  useEffect(() => {
+    const id = new URLSearchParams(location.search).get('id');
+    if (!id) return;
+    setLinkId(id);
+    fetch(`${API_BASE}/api/xmas-links/${id}`, { cache: 'no-store' })
+      .then(r => {
+        if (r.status === 410) { setExpired({ title: 'Link đã hết hạn', sub: 'Thiệp đã hết thời gian hiển thị. Gia hạn bằng Xu để hồi sinh, hoặc tạo thiệp mới miễn phí nhé.' }); return null; }
+        if (r.status === 404) { setExpired({ title: 'Không tìm thấy thiệp', sub: 'Link không tồn tại hoặc đã được dọn dẹp. Tạo thiệp mới của riêng bạn nhé.' }); return null; }
+        if (!r.ok) return null;
+        return r.json();
+      })
+      .then(j => {
+        if (!j || !j.ok || !j.data) return;
+        setGift(j.data);
+        setExpiresAt(j.expiresAt);
+      })
+      .catch(() => {});
+  }, []);
+
+  // Ưu tiên dữ liệu link ?id= → tham số kiểu cũ ?to=/?from= → tên mặc định.
+  // LƯU Ý: `to` của thiệp này là TÊN người nhận (Card thay chữ "Kiều Anh" trong
+  // thư bằng tên đó), nên khi user điền lời chào riêng thì hiển thị như một dòng riêng.
+  const to = gift?.name || qs.get('to') || 'Kiều Anh';
+  const from = gift?.from || qs.get('from') || '';
+  const giftLines = gift && (gift.to || gift.text)
+    ? ([gift.to, gift.text].filter(Boolean) as string[])
+    : null;
   const [photo, setPhoto] = useState<{ img: HTMLImageElement; n: number }>();
   const fileRef = useRef<HTMLInputElement>(null);
   const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -210,11 +255,48 @@ const App: React.FC = () => {
       {/* Message Card */}
       {showCard && (
         <div className="pointer-events-auto">
-            <Card onClose={() => setShowCard(false)} to={to} from={from} />
+            <Card
+              key={`${to}|${from}|${gift?.to || ''}|${gift?.text || ''}|${gift?.sign || ''}`}
+              onClose={() => setShowCard(false)}
+              to={to}
+              from={from}
+              customLines={giftLines}
+              sign={gift?.sign}
+            />
         </div>
       )}
 
       {started && <Countdown />}
+
+      {/* ===== NhutCoder Team — chip thời gian sống của link + màn hết hạn ===== */}
+      {linkId && !expired && expiresAt && <LinkTimer expiresAt={expiresAt} linkId={linkId} />}
+      {expired && (
+        <div className="fixed inset-0 z-[60] bg-black/95 flex flex-col items-center justify-center text-center px-6">
+          <div className="text-4xl text-yellow-300 mb-3">❄</div>
+          <div className="text-2xl md:text-3xl text-yellow-200 font-bold mb-2">{expired.title}</div>
+          <p className="text-sm text-gray-300 max-w-[340px] leading-relaxed mb-5">{expired.sub}</p>
+          <div className="flex flex-col items-center gap-3">
+            {linkId && (
+              <a
+                href={`${CREATE_URL}?id=${linkId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-xl px-5 py-3 text-sm font-bold text-white shadow-lg transition-transform active:scale-95 bg-gradient-to-br from-orange-700 to-orange-500"
+              >
+                Gia hạn link bằng Xu
+              </a>
+            )}
+            <a
+              href={CREATE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-xl px-5 py-3 text-sm font-bold text-white shadow-lg transition-transform active:scale-95 bg-gradient-to-br from-amber-600 to-amber-400"
+            >
+              Tạo thiệp mới — miễn phí
+            </a>
+          </div>
+        </div>
+      )}
 
       {/* Footer / Info & Links */}
       <div className="w-full pb-6 pt-4 text-center z-30 flex flex-col items-center gap-2 bg-gradient-to-t from-black/90 via-black/40 to-transparent">
@@ -241,8 +323,17 @@ const App: React.FC = () => {
                 <Icon n="book" s={13} /> Đọc Blog
             </a>
 
-            <a 
-                href="https://giaydephuongnho.vercel.app" 
+            <a
+                href={CREATE_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="pointer-events-auto text-[10px] md:text-xs text-rose-300 hover:text-rose-200 underline underline-offset-4 transition-colors font-mono font-bold bg-black/40 px-3 py-1.5 rounded-full border border-rose-400/30 shadow-md"
+            >
+                <Icon n="mail" s={13} /> Tạo thiệp riêng của bạn
+            </a>
+
+            <a
+                href="https://giaydephuongnho.vercel.app"
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="pointer-events-auto text-[10px] md:text-xs text-red-400 hover:text-red-300 underline underline-offset-4 transition-colors font-mono font-bold bg-black/40 px-3 py-1.5 rounded-full border border-red-500/30 shadow-md"

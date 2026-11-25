@@ -5,6 +5,10 @@ interface CardProps {
   onClose: () => void;
   to?: string;
   from?: string;
+  /** NhutCoder Team: lời chào/lời nhắn riêng từ link ?id= — thay toàn bộ thư mặc định */
+  customLines?: string[] | null;
+  /** Chữ ký cuối thư (VD: "— Từ Nhut, …") — ưu tiên hơn `from` */
+  sign?: string;
 }
 
 const BASE = [
@@ -66,8 +70,10 @@ const Scramble: React.FC<{ text: string; on: boolean }> = ({ text, on }) => {
   return <>{s}</>;
 };
 
-const Card: React.FC<CardProps> = ({ onClose, to = 'Kiều Anh', from = '' }) => {
-  const LINES = BASE.map((l) => l.split('Kiều Anh').join(to || 'bạn'));
+const Card: React.FC<CardProps> = ({ onClose, to = 'Kiều Anh', from = '', customLines = null, sign }) => {
+  // Link ?id= có lời nhắn riêng → dùng nguyên văn; không thì thay tên vào thư mặc định
+  const LINES: string[] =
+    customLines && customLines.length ? customLines : BASE.map((l) => l.split('Kiều Anh').join(to || 'bạn'));
   const [displayedLines, setDisplayedLines] = useState<string[]>(["", "", ""]);
   const [lineIndex, setLineIndex] = useState(0);
   const [charIndex, setCharIndex] = useState(0);
@@ -155,7 +161,11 @@ const Card: React.FC<CardProps> = ({ onClose, to = 'Kiều Anh', from = '' }) =>
 
         <div className={`mt-4 text-red-600 font-bold text-lg md:text-xl transition-all duration-1000 ${done ? 'opacity-100 scale-105' : 'opacity-0 translate-y-2'}`}>
           <Scramble text="Giáng Sinh Vui Vẻ!" on={done} /> <Icon n="heart" s={18} f className="text-red-500" />
-          {from && <div className="mt-1 text-sm text-gray-500 italic font-normal">— {from}</div>}
+          {(sign || from) && (
+            <div className={`mt-1 text-sm text-gray-500 italic font-normal transition-opacity duration-1000 ${done ? 'opacity-100' : 'opacity-0'}`}>
+              — {sign || from}
+            </div>
+          )}
         </div>
 
         {!done && (
